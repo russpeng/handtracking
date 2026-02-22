@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>67 Gesture Recognition</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: #0d0d0f;
+      color: #e4e4e7;
+      font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+      overflow-x: hidden;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 720px;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: pulse-red 1.5s ease-in-out infinite;
+    }
+    .status-dot.detecting { background: #eab308; animation: pulse-yellow 1.5s ease-in-out infinite; }
+    .status-dot.success { background: #22c55e; animation: pulse-green 0.6s ease-in-out infinite; }
+    @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes pulse-yellow { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    @keyframes pulse-green { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.2); } }
+    .counter-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .counter-value { font-size: 1.5rem; font-weight: 700; color: #a5f3fc; }
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: #27272a;
+      color: #e4e4e7;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #3f3f46; }
+    .btn:active { transform: scale(0.98); }
+    .btn-instructions { background: transparent; color: #a1a1aa; }
+    .feed-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 720px;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #18181b;
+      border: 2px solid #27272a;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .feed-wrap.celebrate {
+      border-color: #22c55e;
+      box-shadow: 0 0 30px rgba(34, 197, 94, 0.4);
+      animation: border-flash 0.5s ease-out;
+    }
+    @keyframes border-flash {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+      70% { box-shadow: 0 0 40px 10px rgba(34, 197, 94, 0.3); }
+      100% { box-shadow: 0 0 30px rgba(34, 197, 94, 0.4); }
+    }
+    #video {
+      display: block;
+      width: 100%;
+      transform: scaleX(-1);
+      background: #000;
+    }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1);
+      pointer-events: none;
+    }
+    .gesture-labels {
+      margin-top: 0.75rem;
+      font-size: 0.95rem;
+      color: #a1a1aa;
+      text-align: center;
+    }
+    .gesture-labels span { margin: 0 0.5rem; }
+    .fps {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      z-index: 2;
+    }
+    .loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #18181b;
+      z-index: 10;
+      gap: 1rem;
+    }
+    .loading.hidden { display: none; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #27272a;
+      border-top-color: #a5f3fc;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-msg {
+      max-width: 400px;
+      padding: 1.5rem;
+      text-align: center;
+      color: #fca5a5;
+      background: #1c1917;
+      border-radius: 12px;
+      border: 1px solid #7f1d1d;
+      margin: 1rem;
+    }
+    .error-msg.hidden { display: none; }
+    .instructions-panel {
+      max-width: 720px;
+      width: 100%;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #18181b;
+      border-radius: 12px;
+      border: 1px solid #27272a;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #a1a1aa;
+    }
+    .instructions-panel.hidden { display: none; }
+    .instructions-panel h3 { color: #e4e4e7; margin-bottom: 0.5rem; font-size: 1rem; }
+    .instructions-panel p { margin-bottom: 0.75rem; }
+    .instructions-panel ul { margin-left: 1.25rem; margin-bottom: 0.75rem; }
+    #confetti {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>67 Gesture</h1>
+    <div class="status-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">No hands detected</span>
+    </div>
+    <div class="counter-row">
+      <span class="counter-value" id="counter">0</span>
+      <button class="btn" id="resetBtn" type="button">Reset</button>
+      <button class="btn btn-instructions" id="instructionsBtn" type="button">Instructions</button>
+    </div>
+  </div>
+
+  <div class="feed-wrap" id="feedWrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <span class="fps" id="fps">0 FPS</span>
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <span>Starting camera & loading model…</span>
+    </div>
+  </div>
+
+  <p class="gesture-labels" id="gestureLabels">—</p>
+
+  <div class="error-msg hidden" id="errorMsg"></div>
+  <div class="instructions-panel hidden" id="instructionsPanel">
+    <h3>How to throw 67</h3>
+    <p>Show <strong>two hands at once</strong>: one hand as &ldquo;6&rdquo;, the other as &ldquo;7&rdquo;.</p>
+    <p><strong>6 (shaka / hang loose):</strong> Thumb and pinky extended, index / middle / ring fingers curled.</p>
+    <p><strong>7:</strong> Thumb, index, and pinky extended; middle and ring fingers curled.</p>
+    <p>When both are detected together, you&rsquo;ll see a green flash and the counter will go up (with a short cooldown between counts).</p>
+  </div>
+
+  <canvas id="confetti"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script>
+(function() {
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const ctx = overlay.getContext('2d');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const counterEl = document.getElementById('counter');
+  const resetBtn = document.getElementById('resetBtn');
+  const feedWrap = document.getElementById('feedWrap');
+  const loading = document.getElementById('loading');
+  const errorMsg = document.getElementById('errorMsg');
+  const instructionsBtn = document.getElementById('instructionsBtn');
+  const instructionsPanel = document.getElementById('instructionsPanel');
+  const gestureLabels = document.getElementById('gestureLabels');
+  const fpsEl = document.getElementById('fps');
+  const confettiCanvas = document.getElementById('confetti');
+
+  let count = 0;
+  let last67Time = 0;
+  const COOLDOWN_MS = 1500;
+  let fps = 0;
+  let frameCount = 0;
+  let lastFpsTime = performance.now();
+  let handsSolution = null;
+
+  function setStatus(kind, text) {
+    statusDot.className = 'status-dot' + (kind ? ' ' + kind : '');
+    statusText.textContent = text;
+  }
+
+  function setError(msg) {
+    loading.classList.add('hidden');
+    errorMsg.classList.remove('hidden');
+    errorMsg.textContent = msg;
+  }
+
+  function hideError() {
+    errorMsg.classList.add('hidden');
+  }
+
+  function getPoint(landmarks, i) {
+    const raw = Array.isArray(landmarks) ? landmarks[i] : (landmarks && (landmarks.get ? landmarks.get(i) : landmarks[i]));
+    if (!raw) return null;
+    const x = typeof raw.x === 'number' ? raw.x : (raw.get ? raw.get(0) : 0);
+    const y = typeof raw.y === 'number' ? raw.y : (raw.get ? raw.get(1) : 0);
+    return { x, y };
+  }
+  function landmarksToArray(landmarks) {
+    if (!landmarks) return [];
+    const out = [];
+    const len = Array.isArray(landmarks) ? landmarks.length : (landmarks.length || 21);
+    for (let i = 0; i < len; i++) {
+      const p = getPoint(landmarks, i);
+      out.push(p || { x: 0, y: 0 });
+    }
+    return out;
+  }
+
+  function drawLandmarks(landmarks, handedness) {
+    const pts = landmarksToArray(landmarks);
+    if (pts.length < 21) return;
+    const color = handedness === 'Left' ? '#22d3ee' : '#a78bfa';
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2;
+    const connections = [
+      [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],
+      [0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]
+    ];
+    connections.forEach(([a, b]) => {
+      const A = pts[a];
+      const B = pts[b];
+      if (!A || !B) return;
+      ctx.beginPath();
+      ctx.moveTo(A.x * overlay.width, A.y * overlay.height);
+      ctx.lineTo(B.x * overlay.width, B.y * overlay.height);
+      ctx.stroke();
+    });
+    pts.forEach((p, i) => {
+      ctx.beginPath();
+      ctx.arc(p.x * overlay.width, p.y * overlay.height, i === 0 ? 6 : 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function isThumbExtended(pts, isRight) {
+    const tip = pts[4];
+    const ip = pts[3];
+    if (!tip || !ip) return false;
+    return isRight ? tip.x < ip.x : tip.x > ip.x;
+  }
+  function isIndexExtended(pts) {
+    return pts[8] && pts[6] && pts[8].y < pts[6].y;
+  }
+  function isMiddleExtended(pts) {
+    return pts[12] && pts[10] && pts[12].y < pts[10].y;
+  }
+  function isRingExtended(pts) {
+    return pts[16] && pts[14] && pts[16].y < pts[14].y;
+  }
+  function isPinkyExtended(pts) {
+    return pts[20] && pts[18] && pts[20].y < pts[18].y;
+  }
+
+  function getGesture(landmarks, handedness) {
+    const pts = landmarksToArray(landmarks);
+    if (pts.length < 21) return null;
+    const isRight = handedness === 'Right';
+    const thumb = isThumbExtended(pts, isRight);
+    const index = isIndexExtended(pts);
+    const middle = isMiddleExtended(pts);
+    const ring = isRingExtended(pts);
+    const pinky = isPinkyExtended(pts);
+    if (thumb && pinky && !index && !middle && !ring) return 6;
+    if (thumb && index && pinky && !middle && !ring) return 7;
+    return null;
+  }
+
+  function runCelebration() {
+    feedWrap.classList.add('celebrate');
+    setTimeout(() => feedWrap.classList.remove('celebrate'), 800);
+    confettiBurst();
+    count++;
+    counterEl.textContent = count;
+    try { playBeep(); } catch (_) {}
+  }
+
+  function confettiBurst() {
+    const w = confettiCanvas.width = window.innerWidth;
+    const h = confettiCanvas.height = window.innerHeight;
+    const g = confettiCanvas.getContext('2d');
+    const colors = ['#22c55e','#a5f3fc','#fbbf24','#f472b6'];
+    const particles = [];
+    for (let i = 0; i < 80; i++) {
+      particles.push({
+        x: w / 2,
+        y: h / 2,
+        vx: (Math.random() - 0.5) * 14,
+        vy: (Math.random() - 0.6) * 12,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: 4 + Math.random() * 6,
+        life: 1
+      });
+    }
+    function step() {
+      g.clearRect(0, 0, w, h);
+      let any = false;
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.3;
+        p.life -= 0.02;
+        if (p.life <= 0) return;
+        any = true;
+        g.globalAlpha = p.life;
+        g.fillStyle = p.color;
+        g.beginPath();
+        g.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        g.fill();
+      });
+      g.globalAlpha = 1;
+      if (any) requestAnimationFrame(step);
+    }
+    step();
+  }
+
+  let audioCtx = null;
+  function playBeep() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.15);
+  }
+
+  function onResults(results) {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsTime >= 1000) {
+      fps = Math.round(frameCount / ((now - lastFpsTime) / 1000));
+      frameCount = 0;
+      lastFpsTime = now;
+    }
+    fpsEl.textContent = fps + ' FPS';
+
+    const multiLandmarks = results.multiHandLandmarks || [];
+    const multiHandedness = results.multiHandedness || [];
+    const vw = video.videoWidth || overlay.width || 640;
+    const vh = video.videoHeight || overlay.height || 480;
+    if (overlay.width !== vw || overlay.height !== vh) {
+      overlay.width = vw;
+      overlay.height = vh;
+    }
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    const gestures = [];
+    multiLandmarks.forEach((lm, i) => {
+      const label = (multiHandedness[i] && multiHandedness[i].label) || (i === 0 ? 'Right' : 'Left');
+      drawLandmarks(lm, label);
+      const g = getGesture(lm, label);
+      if (g !== null) gestures.push({ hand: label, value: g });
+    });
+
+    if (multiLandmarks.length === 0) {
+      setStatus('', 'No hands detected');
+      gestureLabels.textContent = '—';
+      return;
+    }
+    if (multiLandmarks.length === 1) {
+      const g = gestures[0];
+      const handLabel = (multiHandedness[0] && multiHandedness[0].label) || 'Hand';
+      setStatus('detecting', 'Hands detected — waiting for 67');
+      gestureLabels.textContent = g ? (g.hand + ': ' + g.value) : (handLabel + ': —');
+      return;
+    }
+
+    const left = gestures.find(x => x.hand === 'Left');
+    const right = gestures.find(x => x.hand === 'Right');
+    const has6 = (left && left.value === 6) || (right && right.value === 6);
+    const has7 = (left && left.value === 7) || (right && right.value === 7);
+    const leftVal = left ? left.value : '—';
+    const rightVal = right ? right.value : '—';
+    gestureLabels.textContent = 'Left: ' + leftVal + ' | Right: ' + rightVal;
+
+    if (has6 && has7 && (now - last67Time) >= COOLDOWN_MS) {
+      last67Time = now;
+      setStatus('success', '67 DETECTED!');
+      runCelebration();
+    } else {
+      setStatus('detecting', 'Hands detected — waiting for 67');
+    }
+  }
+
+  function init() {
+    if (typeof Hands === 'undefined' || typeof Camera === 'undefined') {
+      setError('MediaPipe failed to load. Check your connection and try again.');
+      return;
+    }
+    const hands = new Hands({
+      locateFile: (file) => 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/' + file
+    });
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    hands.onResults(onResults);
+    handsSolution = hands;
+
+    hands.initialize()
+      .then(() => {
+        const camera = new Camera(video, {
+          onFrame: async () => {
+            await hands.send({ image: video });
+          },
+          width: 640,
+          height: 480,
+          facingMode: 'user'
+        });
+        camera.start()
+          .then(() => {
+            loading.classList.add('hidden');
+            hideError();
+            overlay.width = 640;
+            overlay.height = 480;
+          })
+          .catch((err) => {
+            setError('Camera access denied or failed. Please allow camera and refresh. ' + (err && err.message ? err.message : ''));
+          });
+      })
+      .catch(() => {
+        setError('MediaPipe model failed to load. Check your connection.');
+      });
+  }
+
+  resetBtn.addEventListener('click', () => {
+    count = 0;
+    counterEl.textContent = '0';
+  });
+  instructionsBtn.addEventListener('click', () => {
+    instructionsPanel.classList.toggle('hidden');
+  });
+
+  video.addEventListener('loadedmetadata', () => {
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+  });
+
+  window.addEventListener('load', () => {
+    init();
+  });
+})();
+  </script>
+</body>
+</html>
